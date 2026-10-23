@@ -34,10 +34,13 @@ layout take seconds. `uv run whosaid inspect clip.mp4 --workdir out/clip.work --
 ## How it works
 
 1. **Faces**: OpenCV YuNet at 25 fps (handles turned and profile faces) and an IoU tracker with gap interpolation (`faces.py`).
+   Shot cuts are detected and tracks never link across them, so a close-up of someone new in the same spot is a new person;
+   a speaker whose shot ended is not carried onto the next shot (their words become an off-screen caption).
 2. **Who is speaking**: LR-ASD, a 0.84 M-parameter audio-visual detector, scores each face per frame from lower-face crops and
    MFCCs (`asd.py`, `lrasd/`). Scores are calibrated per face (`calibrate.py`), because some faces look "talking" regardless.
-3. **Separating voices**: when two faces are on screen together, Dolphin (an audio-visual extractor driven by lip crops)
-   pulls each face's voice out of the mixture, and each voice is transcribed on its own (`separate.py`, `lips.py`, `dolphin/`).
+3. **Separating voices**: when two on-screen faces are scored as speaking at the same time for a few seconds, Dolphin (an audio-visual extractor driven by lip crops)
+   pulls each face's voice out of the mixture, and each voice is transcribed on its own (`separate.py`, `lips.py`, `dolphin/`). Clean turn-taking skips this step (`--separate off|auto|on`): it is two thirds of the
+   run time and its leaks can hurt a clip where nobody talks over anyone.
 4. **What was said**: faster-whisper with word timestamps; per-voice language detection and optional translation (`asr.py`, `translate.py`).
 5. **Attribution**: each word goes to the face whose voice produced it or whose speaking score clears the threshold;
    words nobody on screen accounts for become off-screen captions. Leaked duplicates between stems are removed (`attribute.py`, `pipeline.py`).
@@ -60,7 +63,11 @@ Protocol: tune on dev (val + train), run test once.
 | | cpWER, 12 held-out test scenes |
 |---|---|
 | first baseline (every face separated) | 57.2 % |
-| current default | **47.5 %** |
+| separation on for every scene with two faces (`--separate on`) | **47.5 %** |
+
+The 47.5 % was measured before the `auto` overlap gate existed. With the gate, dev cpWER moved 41.8 -> 42.6 % (scenes that
+lost separation: 24.6 -> 26.2 %), the price for fixing real clips of clean turn-taking such as TV studio cuts, where
+extracted voices leaked words to the wrong person.
 
 These are numbers on synthetic scenes built from a small set of people, and the reference transcripts are Whisper on the
 clean audio. They show relative progress, not production accuracy. Remaining errors: stem leakage between extracted
@@ -123,7 +130,8 @@ to run when free disk is low (`whosaid storage`, `WHOSAID_MIN_FREE_GB`).
 - Separation is imperfect: words leak between stems, Whisper errs on extracted audio, and voices of people who are not
   visible are only heard through the mixture.
 - Cold runs are slow on CPU (voice separation is about two thirds of the time).
-- Face re-identification across cuts is not implemented: a returning person gets a new track.
+- Face re-identification across cuts is not implemented: a returning person gets a new track, and a person who talks
+  while the camera shows someone else is captioned as off-screen rather than under their own face.
 - Photos and video insets that look like faces can still be treated as people.
 - Accuracy on real footage has not been measured against human labels.
 - Translation quality follows Whisper: fine for common words, weaker on rare ones.

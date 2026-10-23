@@ -16,6 +16,8 @@ from .paths import FACE_MODEL
 
 MODEL_URL = "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"
 DETECT_WIDTH = 960  # detection runs on a downscaled frame
+CUT_MAD = 15.0      # shot cut: mean |gray difference| of 64x36 thumbnails between consecutive frames ...
+CUT_HIST = 0.3      # ... and L1 change of the 16x8 hue/saturation histogram. Both must trip: motion trips one at most.
 
 
 @dataclass
@@ -29,6 +31,7 @@ class Track:
     score: np.ndarray | None = None  # filled by ASD: (n,) speaking logit (calibrated in place when asd_calib is on)
     score_raw: np.ndarray | None = None  # the detector's untouched output, kept when calibrating
     score_asd: np.ndarray | None = None  # the detector's (calibrated) score before voice-energy fusion
+    cut_end: bool = False            # the track ended because the shot changed (the person did not leave the frame)
     static: bool = False             # a photo / poster / frozen overlay mistaken for a face (see photos.py)
     lm: np.ndarray | None = None     # (n, 5, 2) YuNet landmarks: eyes, nose tip, mouth corners (image coords)
     lips: np.ndarray | None = None   # (n, 88, 88) uint8 aligned mouth crops for Dolphin, filled with the ASD crops
@@ -73,6 +76,21 @@ class _Live:
     last: _Det
     last_frame: int
     pts: list = field(default_factory=list)  # (frame, cx, cy, s)
+    cut: bool = False
+
+
+def _thumb(frame: np.ndarray):
+    """(gray 64x36 float, normalised hue/saturation histogram) used to spot shot cuts."""
+    import cv2
+
+    small = cv2.resize(frame, (64, 36), interpolation=cv2.INTER_AREA)
+    h = cv2.calcHist([cv2.cvtColor(small, cv2.COLOR_BGR2HSV)], [0, 1], None, [16, 8], [0, 180, 0, 256]).ravel()
+    return cv2.cvtColor(small, cv2.COLOR_BGR2GRAY).astype(np.float32), h / max(h.sum(), 1.0)
+
+
+def is_cut(prev, cur) -> bool:
+    """True when two consecutive frames (as returned by _thumb) belong to different shots."""
+    return bool(np.abs(prev[0] - cur[0]).mean() > CUT_MAD and np.abs(prev[1] - cur[1]).sum() > CUT_HIST)
 
 
 def _ensure_model(model_path: Path) -> Path:
@@ -106,12 +124,20 @@ def track_faces(
     done: list[_Live] = []
     next_id = 0
     n_frames = int(info.duration * ASD_FPS)
+    prev_thumb = None
 
     for f, small in enumerate(iter_frames(video, info, ASD_FPS, out_width=DETECT_WIDTH)):
         if detector is None:
             detector = cv2.FaceDetectorYN.create(
                 str(model_path), "", (small.shape[1], small.shape[0]), min_conf, 0.3, 5000
             )
+        thumb = _thumb(small)
+        if prev_thumb is not None and is_cut(prev_thumb, thumb):
+            for t in live:         # a different shot: nobody carries over, even if a face sits in the same place
+                t.cut = True
+            done.extend(live)
+            live = []
+        prev_thumb = thumb
         _, rows = detector.detect(small)
         dets = [_to_det(r, scale) for r in (rows if rows is not None else [])]
 
@@ -156,7 +182,7 @@ def _finalize(raw: list[_Live], min_len: int) -> list[Track]:
         lm = np.stack([_smooth(np.interp(frames, pts[:, 0], pts[:, k]), 2.0) for k in range(4, 14)], 1).reshape(-1, 5, 2)
         observed = np.isin(frames, pts[:, 0].astype(int))
         cx, cy, s = (_smooth(a, 2.0) for a in (cx, cy, s))
-        tracks.append(Track(len(tracks), frames, cx, cy, s, observed, lm=lm))
+        tracks.append(Track(len(tracks), frames, cx, cy, s, observed, lm=lm, cut_end=t.cut))
     return tracks
 
 

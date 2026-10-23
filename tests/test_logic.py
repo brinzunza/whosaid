@@ -139,3 +139,38 @@ def test_stem_words_win_and_mix_only_words_are_offscreen():
     stem = {0: [Word(0.05, .45, "hello", 0)], 1: [Word(1.0, 1.4, "hidden", 1)]}
     out = merge_stem_words(mix, stem)
     assert [(w.text, w.speaker) for w in out] == [("hello", 0), ("hidden", 1), ("other", None)]
+
+
+def test_shot_cut_detection_splits_on_cuts_not_motion():
+    import numpy as np
+
+    from whosaid.faces import _thumb, is_cut
+
+    rng = np.random.default_rng(0)
+    a = np.full((90, 160, 3), (200, 80, 40), np.uint8)
+    b = np.full((90, 160, 3), (30, 160, 220), np.uint8)
+    shifted = np.roll(a, 3, axis=1)
+    noisy = np.clip(a.astype(int) + rng.integers(-6, 7, a.shape), 0, 255).astype(np.uint8)
+    assert is_cut(_thumb(a), _thumb(b))
+    assert not is_cut(_thumb(a), _thumb(shifted))
+    assert not is_cut(_thumb(a), _thumb(noisy))
+
+
+def test_speaker_whose_shot_ended_is_not_carried_onto_the_next_shot():
+    a = mk_track(0, 0, 50, 100, score=3)
+    a.cut_end = True                          # the camera cut away; the person did not walk out of frame
+    words = [Word(1.0, 1.5, "wait"), Word(2.4, 2.8, "what")]
+    attribute_words(words, [a])
+    assert [w.speaker for w in words] == [0, None]
+
+
+def test_overlap_seconds_counts_only_simultaneous_speech():
+    from whosaid.pipeline import overlap_seconds
+
+    a, b = mk_track(0, 0, 250, 200, score=-3), mk_track(1, 0, 250, 800, score=-3)
+    a.score[0:100] = 4
+    b.score[100:200] = 4                      # clean turn-taking: never both at once
+    assert overlap_seconds([a, b]) == 0.0
+    b.score[50:150] = 4                       # now both speak for 2 s (frames 50-99)
+    assert 1.5 <= overlap_seconds([a, b]) <= 2.5
+    assert overlap_seconds([a]) == 0.0

@@ -58,6 +58,29 @@ def _overlapping(tracks) -> bool:
     return any(a.start <= b.end and b.start <= a.end for i, a in enumerate(tracks) for b in tracks[i + 1:])
 
 
+OVERLAP_MIN_S = 3.0      # 'auto' separates voices only if at least this many seconds have two faces clearly speaking at once
+
+
+def overlap_seconds(tracks, thresh: float = 1.0) -> float:
+    """Seconds during which two or more on-screen (non-static) faces are both scored as speaking: the only time the
+    mixture can hold two voices that a single transcript would garble. Separation costs two thirds of the run time and
+    can hurt a clip of clean turn-taking (extracted voices leak and drop words), so 'auto' skips it without overlap."""
+    from .attribute import smoothed_scores
+
+    tracks = [t for t in tracks if not getattr(t, "static", False)]
+    if len(tracks) < 2:
+        return 0.0
+    sc = smoothed_scores(tracks)
+    n = max(t.end + 1 for t in tracks)
+    speaking = np.zeros(n)
+    for t in tracks:
+        if t.id in sc:
+            on = np.zeros(n, bool)
+            on[t.start: t.end + 1] = sc[t.id][: len(t.frames)] > thresh
+            speaking += on
+    return float((speaking >= 2).sum()) / 25.0
+
+
 def analyze(src, workdir=None, whisper_model="small", language=None, use_voices=True, fresh=False, log=lambda m: None,
             separate="auto", timings: dict | None = None, asd_model: str | None = None, asd_calib: str = "none", fuse: str | None = None,
             translate: str | None = None, static_filter: bool = False) -> Analysis:
@@ -145,7 +168,10 @@ def analyze(src, workdir=None, whisper_model="small", language=None, use_voices=
             if flagged:
                 log(f"    ignoring {len(flagged)} static face(s) (photos / posters / frozen overlays): {flagged}")
         active = active_track_ids(tracks)
-        do_sep = bool(tracks) and (separate == "on" or (separate == "auto" and _overlapping(tracks) and len(active) >= 1))
+        ovl = overlap_seconds(tracks) if separate == "auto" and _overlapping(tracks) else 0.0
+        do_sep = bool(tracks) and (separate == "on" or (separate == "auto" and ovl >= OVERLAP_MIN_S and len(active) >= 1))
+        if separate == "auto" and _overlapping(tracks) and not do_sep:
+            log(f"    faces share the screen but only {ovl:.1f}s of speech overlaps: transcribing the mix without separation")
         centres, emb = np.zeros(0), np.zeros((0, 192))
         if use_voices and tracks and not do_sep:      # voice clustering is only the fallback when we don't separate
             def voices():

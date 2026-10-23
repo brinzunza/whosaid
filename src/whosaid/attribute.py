@@ -112,16 +112,21 @@ def attribute_words(words: list[Word], tracks: list[Track], thresh: float = SPEA
             prev = w
         elif prev is not None and w.start - prev.end <= CARRY_GAP:
             t = by_id[prev.speaker]
-            if int(w.start * ASD_FPS) > t.end:
+            if int(w.start * ASD_FPS) > t.end and not t.cut_end:   # after a shot cut the speaker is simply not on screen
                 w.speaker = prev.speaker
                 prev = w
     # fill short unattributed islands between two words by the same speaker
     for i in range(1, len(words) - 1):
         a, w, b = words[i - 1], words[i], words[i + 1]
         if w.speaker is None and a.speaker is not None and a.speaker == b.speaker:
-            if w.start - a.end <= FILL_GAP and b.start - w.end <= FILL_GAP:
+            if w.start - a.end <= FILL_GAP and b.start - w.end <= FILL_GAP and _on_screen(by_id[a.speaker], w):
                 w.speaker = a.speaker
     smooth_flips(words)
+
+
+def _on_screen(t: Track, w: Word) -> bool:
+    """False when the track ended at a shot cut before this word: its owner is not visible any more."""
+    return not t.cut_end or int(w.start * ASD_FPS) <= t.end
 
 
 def smooth_flips(words: list[Word], max_run: int = 2, weak: float = 2.0) -> None:
