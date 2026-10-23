@@ -7,6 +7,20 @@ other languages can be translated into English captions.
 
 Everything runs locally on CPU. No API calls, no uploads.
 
+## Demo
+
+Original clip on the left, the same clip captioned by whosaid on the right (a TV studio sketch: wide shot, then close-ups
+that cut between three people). Each line sits under whoever says it, and a line spoken while the camera shows someone else
+becomes an off-screen caption. Full 55 s version with sound: [docs/demo/side_by_side.mp4](docs/demo/side_by_side.mp4).
+
+![Original video (left) next to the whosaid-captioned version (right)](docs/demo/side_by_side.gif)
+
+```bash
+uv run whosaid sportsdebate.mp4 --whisper-model medium --language en
+```
+
+The clip is third-party content used only to illustrate the tool; it is not covered by this repository's license.
+
 ![Per-face speaking scores, voice clusters and final attribution for a 56 s two-person clip](docs/img/example_timeline.png)
 
 *Debug timeline for one clip (`whosaid inspect`): the two curves are each face's speaking score, the bottom bar is
