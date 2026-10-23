@@ -1,0 +1,41 @@
+[project]
+name = "whosaid"
+version = "0.1.0"
+description = "Speaker-locked captions: detect who is talking and caption them under their face"
+readme = "README.md"
+authors = [
+    { name = "Bruno Inzunza", email = "bruno.inzunza24@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "av<17",
+    "beartype>=0.23.1",
+    "einops>=0.8.2",
+    "faster-whisper>=1.2.1",
+    "matplotlib>=3.11.2",
+    "numpy>=2.5.4",
+    "opencv-python>=5.0.0.93",
+    "packaging>=26.3",
+    "pillow>=13.0.0",
+    "python-speech-features>=0.6",
+    "safetensors>=0.8.0",
+    "scikit-learn>=1.9.1",
+    "scipy>=1.18.1",
+    "speechbrain>=1.1.2",
+    "taylor-series-linear-attention>=0.2.0",
+    "torch>=2.14.1",
+    "tqdm>=4.70.1",
+    "vector-quantize-pytorch>=1.31.6",
+]
+
+[project.scripts]
+whosaid = "whosaid.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

@@ -1,0 +1,17 @@
+models/*.task
+.venv/
+__pycache__/
+*.egg-info/
+out/
+models/ecapa/
+data/
+.DS_Store
+*.log
+*.work/
+*.captioned.*
+*.mp4
+*.mov
+*.mkv
+*.webm
+*.wav
+*.npz
