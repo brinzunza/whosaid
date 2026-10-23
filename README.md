@@ -11,9 +11,9 @@ Everything runs locally on CPU. No API calls, no uploads.
 
 Original clip on the left, the same clip captioned by whosaid on the right (a TV studio sketch: wide shot, then close-ups
 that cut between three people). Each line sits under whoever says it, and a line spoken while the camera shows someone else
-becomes an off-screen caption. Click the image to play the 55 s video with sound.
+becomes an off-screen caption. Press play below for the 55 s video with sound; the file is also at [docs/demo/side_by_side.mp4](docs/demo/side_by_side.mp4).
 
-[![Original (left) vs whosaid-captioned (right): click to play the video]([docs/demo/poster.jpg](https://github.com/user-attachments/assets/1ad65a41-06dd-4338-8be0-489e83efc878))](docs/demo/side_by_side.mp4)
+https://github.com/user-attachments/assets/1ad65a41-06dd-4338-8be0-489e83efc878
 
 ```bash
 uv run whosaid sportsdebate.mp4 --whisper-model medium --language en
