@@ -174,3 +174,24 @@ def test_overlap_seconds_counts_only_simultaneous_speech():
     b.score[50:150] = 4                       # now both speak for 2 s (frames 50-99)
     assert 1.5 <= overlap_seconds([a, b]) <= 2.5
     assert overlap_seconds([a]) == 0.0
+
+
+def test_word_mostly_after_a_cut_is_not_given_to_the_previous_shots_face():
+    a = mk_track(0, 0, 50, 100, score=4)      # shot 1 face (score still high), ends at 2.04 s by a cut
+    a.cut_end = True
+    b = mk_track(1, 51, 120, 100, score=-3)   # shot 2 face
+    b.score[:] = 1.2                          # weakly positive at the start of its track
+    b.score[10:] = 4
+    words = [Word(2.0, 2.4, "No,"), Word(2.5, 2.8, "no")]
+    attribute_words(words, [a, b])
+    assert words[0].speaker != 0
+    assert words[1].speaker == 1
+
+
+def test_lead_in_word_joins_the_face_whose_score_is_rising():
+    a = mk_track(0, 0, 200, 300, score=-3)
+    a.score[40:60] = np.linspace(0.3, 3.0, 20)                   # onset ramps up (detector lag)
+    a.score[60:] = 3.0
+    words = [Word(1.62, 1.9, "Okay,"), Word(1.95, 2.3, "so"), Word(2.35, 2.7, "here")]
+    attribute_words(words, [a])
+    assert [w.speaker for w in words] == [0, 0, 0]

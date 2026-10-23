@@ -13,6 +13,9 @@ SPEAK_THRESH = 1.0       # raw LR-ASD logit a face needs to count as speaking at
 TIE = 0.5                # calibrated scores closer than this are a tie -> voice breaks it
 MIN_COVERAGE = 0.5       # track must be visible for this fraction of the word
 CARRY_GAP = 1.5          # seconds: carry speaker to a word after they left the frame
+LEAD_GAP = 0.1           # an unattributed word this close before a face's first word may join it (detector lags speech onset)
+LEAD_MIN = 0.2           # ...if that face's score is already above this and not falling over the word
+CUT_AFTER_FRAC = 0.4     # a track that ended at a shot cut is ignored for a word with more than this share after the cut
 SWITCH_MARGIN = 1.0      # a new speaker must beat the current one by this many logits (crosstalk / reaction faces)
 FILL_GAP = 0.6           # seconds: fill unattributed words between two words of one speaker
 
@@ -60,6 +63,8 @@ def _word_values(words: list[Word], tracks: list[Track], scores) -> list[dict[in
             if t.id not in scores:
                 continue
             lo, hi = max(f0, t.start), min(f1, t.end + 1)
+            if t.cut_end and (f1 - (t.end + 1)) > CUT_AFTER_FRAC * (f1 - f0):
+                continue                                  # mostly said after the camera left this person
             if hi - lo >= MIN_COVERAGE * (f1 - f0):
                 vals[t.id] = float(scores[t.id][lo - t.start : hi - t.start].mean())
         out.append(vals)
@@ -121,6 +126,17 @@ def attribute_words(words: list[Word], tracks: list[Track], thresh: float = SPEA
         if w.speaker is None and a.speaker is not None and a.speaker == b.speaker:
             if w.start - a.end <= FILL_GAP and b.start - w.end <= FILL_GAP and _on_screen(by_id[a.speaker], w):
                 w.speaker = a.speaker
+    # lead-in: a word just before a face's first word, said while that face's score is already rising
+    for i in range(len(words) - 1):
+        w, b = words[i], words[i + 1]
+        if w.speaker is None and b.speaker is not None and b.start - w.end <= LEAD_GAP and vals_per_word[i].get(b.speaker) is not None:
+            mine = vals_per_word[i][b.speaker]
+            t = by_id[b.speaker]
+            f0 = max(int(w.start * ASD_FPS), t.start)
+            seg = scores[t.id][f0 - t.start: max(int(w.end * ASD_FPS), f0 + 1) - t.start]
+            rivals = [v for tid, v in vals_per_word[i].items() if tid != b.speaker]
+            if len(seg) and mine > LEAD_MIN and seg[-1] >= seg[0] and (not rivals or mine >= max(rivals)):
+                w.speaker = b.speaker
     smooth_flips(words)
 
 
