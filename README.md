@@ -13,7 +13,7 @@ Original clip on the left, the same clip captioned by whosaid on the right (a TV
 that cut between three people). Each line sits under whoever says it, and a line spoken while the camera shows someone else
 becomes an off-screen caption. Click the image to play the 55 s video with sound.
 
-[![Original (left) vs whosaid-captioned (right): click to play the video](docs/demo/poster.jpg)](docs/demo/side_by_side.mp4)
+[![Original (left) vs whosaid-captioned (right): click to play the video]([docs/demo/poster.jpg](https://github.com/user-attachments/assets/1ad65a41-06dd-4338-8be0-489e83efc878))](docs/demo/side_by_side.mp4)
 
 ```bash
 uv run whosaid sportsdebate.mp4 --whisper-model medium --language en
